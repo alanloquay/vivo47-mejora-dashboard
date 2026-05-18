@@ -1,19 +1,17 @@
 "use client";
 
 import {
-  Bar,
-  BarChart,
   CartesianGrid,
   Legend,
+  Line,
+  LineChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis
 } from "recharts";
-import { CLUB_COLORS } from "@/lib/constants";
+import { CLUB_COLORS, CLUB_SHORT_NAMES } from "@/lib/constants";
 import { EmptyState } from "@/components/EmptyState";
-
-const FALLBACK_COLORS = ["#12b96a", "#087746", "#0a5e3a", "#4b5563", "#111827"];
 
 export function ClubWeekChart({
   data,
@@ -25,8 +23,8 @@ export function ClubWeekChart({
   if (!data.length || !clubKeys.length) {
     return (
       <EmptyState
-        message="No hay semanas suficientes para agrupar por club."
-        title="Sin datos semanales por club"
+        message="No hay semanas suficientes para comparar clubes."
+        title="Sin tendencia por club"
       />
     );
   }
@@ -34,12 +32,14 @@ export function ClubWeekChart({
   return (
     <section className="rounded-lg border border-neutral-200 bg-white p-5 shadow-soft">
       <div className="mb-4">
-        <h2 className="text-lg font-semibold text-ink-950">Club por semana</h2>
-        <p className="mt-1 text-sm text-neutral-500">Distribución semanal por sucursal.</p>
+        <h2 className="text-lg font-semibold text-ink-950">Tendencia por club</h2>
+        <p className="mt-1 text-sm text-neutral-500">
+          Una línea por club en las últimas semanas.
+        </p>
       </div>
       <div className="h-80">
         <ResponsiveContainer height="100%" width="100%">
-          <BarChart data={data} margin={{ bottom: 8, left: 0, right: 12, top: 12 }}>
+          <LineChart data={data} margin={{ bottom: 8, left: 0, right: 14, top: 12 }}>
             <CartesianGrid stroke="#e5e7eb" strokeDasharray="4 4" vertical={false} />
             <XAxis dataKey="weekLabel" tick={{ fill: "#6b7280", fontSize: 12 }} />
             <YAxis allowDecimals={false} tick={{ fill: "#6b7280", fontSize: 12 }} />
@@ -51,17 +51,19 @@ export function ClubWeekChart({
               }}
             />
             <Legend />
-            {clubKeys.map((club, index) => (
-              <Bar
+            {clubKeys.map((club) => (
+              <Line
+                activeDot={{ r: 5 }}
                 dataKey={club}
-                fill={CLUB_COLORS[club] ?? FALLBACK_COLORS[index % FALLBACK_COLORS.length]}
+                dot={{ r: 2 }}
                 key={club}
-                name={club}
-                radius={[6, 6, 0, 0]}
-                stackId="club"
+                name={CLUB_SHORT_NAMES[club] ?? club}
+                stroke={CLUB_COLORS[club] ?? "#111827"}
+                strokeWidth={3}
+                type="monotone"
               />
             ))}
-          </BarChart>
+          </LineChart>
         </ResponsiveContainer>
       </div>
     </section>

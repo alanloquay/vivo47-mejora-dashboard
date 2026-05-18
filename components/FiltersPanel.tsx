@@ -12,6 +12,7 @@ type FiltersPanelProps = {
   options: FilterOptions;
   onChange: (key: keyof DashboardFilters, value: string) => void;
   onReset: () => void;
+  visibleFields?: Array<keyof DashboardFilters>;
 };
 
 function SelectField({
@@ -75,64 +76,95 @@ export function FiltersPanel({
   filters,
   options,
   onChange,
-  onReset
+  onReset,
+  visibleFields = [
+    "dateFrom",
+    "dateTo",
+    "club",
+    "team",
+    "collaborator",
+    "category",
+    "week",
+    "month",
+    "year"
+  ]
 }: FiltersPanelProps) {
+  const isVisible = (field: keyof DashboardFilters) => visibleFields.includes(field);
+
   return (
     <section className="rounded-lg border border-neutral-200 bg-white p-4 shadow-soft">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div className="grid flex-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
-          <DateField
-            label="Desde"
-            onChange={(value) => onChange("dateFrom", value)}
-            value={filters.dateFrom}
-          />
-          <DateField
-            label="Hasta"
-            onChange={(value) => onChange("dateTo", value)}
-            value={filters.dateTo}
-          />
-          <SelectField
-            label="Club"
-            onChange={(value) => onChange("club", value)}
-            options={options.clubs}
-            value={filters.club}
-          />
-          <SelectField
-            label="Equipo"
-            onChange={(value) => onChange("team", value)}
-            options={options.teams}
-            value={filters.team}
-          />
-          <SelectField
-            label="Colaborador"
-            onChange={(value) => onChange("collaborator", value)}
-            options={options.collaborators}
-            value={filters.collaborator}
-          />
-          <SelectField
-            label="Categoría"
-            onChange={(value) => onChange("category", value)}
-            options={options.categories}
-            value={filters.category}
-          />
-          <SelectField
-            label="Semana"
-            onChange={(value) => onChange("week", value)}
-            options={options.weeks}
-            value={filters.week}
-          />
-          <SelectField
-            label="Mes"
-            onChange={(value) => onChange("month", value)}
-            options={options.months}
-            value={filters.month}
-          />
-          <SelectField
-            label="Año"
-            onChange={(value) => onChange("year", value)}
-            options={options.years}
-            value={filters.year}
-          />
+          {isVisible("dateFrom") ? (
+            <DateField
+              label="Desde"
+              onChange={(value) => onChange("dateFrom", value)}
+              value={filters.dateFrom}
+            />
+          ) : null}
+          {isVisible("dateTo") ? (
+            <DateField
+              label="Hasta"
+              onChange={(value) => onChange("dateTo", value)}
+              value={filters.dateTo}
+            />
+          ) : null}
+          {isVisible("club") ? (
+            <SelectField
+              label="Club"
+              onChange={(value) => onChange("club", value)}
+              options={options.clubs}
+              value={filters.club}
+            />
+          ) : null}
+          {isVisible("team") ? (
+            <SelectField
+              label="País"
+              onChange={(value) => onChange("team", value)}
+              options={options.teams}
+              value={filters.team}
+            />
+          ) : null}
+          {isVisible("collaborator") ? (
+            <SelectField
+              label="Colaborador"
+              onChange={(value) => onChange("collaborator", value)}
+              options={options.collaborators}
+              value={filters.collaborator}
+            />
+          ) : null}
+          {isVisible("category") ? (
+            <SelectField
+              label="Categoría"
+              onChange={(value) => onChange("category", value)}
+              options={options.categories}
+              value={filters.category}
+            />
+          ) : null}
+          {isVisible("week") ? (
+            <SelectField
+              label="Semana"
+              onChange={(value) => onChange("week", value)}
+              options={options.weeks}
+              value={filters.week}
+            />
+          ) : null}
+          {isVisible("month") ? (
+            <SelectField
+              label="Mes"
+              onChange={(value) => onChange("month", value)}
+              options={options.months}
+              value={filters.month}
+            />
+          ) : null}
+          {isVisible("year") ? (
+            <SelectField
+              label="Año"
+              onChange={(value) => onChange("year", value)}
+              options={options.years}
+              value={filters.year}
+            />
+          ) : null}
         </div>
         <button
           className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-neutral-200 bg-neutral-50 px-4 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-100"

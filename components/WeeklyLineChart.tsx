@@ -13,7 +13,15 @@ import {
 import type { WeeklyPoint } from "@/lib/metrics";
 import { EmptyState } from "@/components/EmptyState";
 
-export function WeeklyLineChart({ data }: { data: WeeklyPoint[] }) {
+export function WeeklyLineChart({
+  data,
+  title = "Mejoras por semana",
+  subtitle = "Avance semanal contra meta."
+}: {
+  data: WeeklyPoint[];
+  title?: string;
+  subtitle?: string;
+}) {
   if (!data.length) {
     return (
       <EmptyState
@@ -26,8 +34,8 @@ export function WeeklyLineChart({ data }: { data: WeeklyPoint[] }) {
   return (
     <section className="rounded-lg border border-neutral-200 bg-white p-5 shadow-soft">
       <div className="mb-4">
-        <h2 className="text-lg font-semibold text-ink-950">Mejoras por semana</h2>
-        <p className="mt-1 text-sm text-neutral-500">Avance semanal contra meta global.</p>
+        <h2 className="text-lg font-semibold text-ink-950">{title}</h2>
+        <p className="mt-1 text-sm text-neutral-500">{subtitle}</p>
       </div>
       <div className="h-80">
         <ResponsiveContainer height="100%" width="100%">

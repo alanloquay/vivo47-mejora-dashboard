@@ -1,8 +1,13 @@
 import {
+  ACTIVE_CLUBS,
+  CLUB_ACCENTS,
   CLUB_COLORS,
+  CLUB_LOGOS,
+  CLUB_SHORT_NAMES,
   CLUB_WEEKLY_GOALS,
   DEFAULT_FILTERS,
-  GLOBAL_WEEKLY_GOAL
+  GLOBAL_WEEKLY_GOAL,
+  HIDDEN_CLUBS
 } from "@/lib/constants";
 import {
   addDays,
@@ -12,6 +17,7 @@ import {
   toISODate
 } from "@/lib/normalizeData";
 import type {
+  CountryUniverse,
   DashboardFilters,
   FilterOptions,
   Improvement,
@@ -35,11 +41,61 @@ export type ClubTotal = {
   goal: number | null;
   compliance: number | null;
   color: string;
+  logo: string;
+  shortName: string;
 };
 
 export type RankingItem = {
   name: string;
   count: number;
+};
+
+export type CountryRankingItem = RankingItem & {
+  club: string;
+  color: string;
+  logo: string;
+  shortName: string;
+};
+
+export type CountryStreakItem = {
+  team: string;
+  club: string;
+  streak: number;
+  color: string;
+  logo: string;
+  shortName: string;
+};
+
+export type ClubParticipationItem = {
+  club: string;
+  goal: number;
+  logo: string;
+  color: string;
+  accent: string;
+  shortName: string;
+  lastCompletedWeekLabel: string;
+  lastCompletedWeekStart: string;
+  lastWeekCount: number;
+  goalCompliance: number;
+  activeTeams: number;
+  totalTeams: number;
+  countryCompliance: number;
+};
+
+export type ParticipationMatrixWeek = {
+  weekKey: string;
+  weekLabel: string;
+  weekStart: string;
+};
+
+export type ParticipationMatrixRow = {
+  team: string;
+  activeWeeks: number;
+  cells: Array<{
+    weekKey: string;
+    count: number;
+    active: boolean;
+  }>;
 };
 
 export type StreakItem = {
@@ -77,14 +133,51 @@ export type DashboardMetrics = {
   clubWeekKeys: string[];
   topCollaborators: RankingItem[];
   topTeams: RankingItem[];
+  topCountries: CountryRankingItem[];
+  topCountryStreaks: CountryStreakItem[];
   categoryTotals: RankingItem[];
   latest: Improvement[];
   streaks: StreakItem[];
+  clubParticipation: ClubParticipationItem[];
+  matrixWeeks: ParticipationMatrixWeek[];
+  participationMatrix: ParticipationMatrixRow[];
   dayActivity: ActivityDay[];
 };
 
 function isActiveFilter(value?: string) {
   return Boolean(value && value !== "all");
+}
+
+function normalizeKey(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
+function uniqueNormalized(values: string[]) {
+  const seen = new Set<string>();
+  return values.flatMap((value) => {
+    const clean = value.replace(/\s+/g, " ").trim();
+    const key = normalizeKey(clean);
+    if (!clean || seen.has(key)) {
+      return [];
+    }
+    seen.add(key);
+    return [clean];
+  });
+}
+
+export function isVisibleClub(club: string) {
+  return ACTIVE_CLUBS.includes(club as (typeof ACTIVE_CLUBS)[number]);
+}
+
+export function filterVisibleRecords(records: Improvement[]) {
+  return records.filter(
+    (record) => isVisibleClub(record.club) && !HIDDEN_CLUBS.includes(record.club)
+  );
 }
 
 function parseISODateLocal(value: string) {
@@ -112,16 +205,14 @@ function rankBy(
   accessor: (record: Improvement) => string | undefined,
   limit = 8
 ): RankingItem[] {
-  return Array.from(
-    countBy(records, (record) => accessor(record) ?? "").entries()
-  )
+  return Array.from(countBy(records, (record) => accessor(record) ?? "").entries())
     .map(([name, count]) => ({ name, count }))
     .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
     .slice(0, limit);
 }
 
 function optionize(values: string[], descending = false): SelectOption[] {
-  const sorted = Array.from(new Set(values.filter(Boolean))).sort((a, b) =>
+  const sorted = uniqueNormalized(values.filter(Boolean)).sort((a, b) =>
     descending ? b.localeCompare(a) : a.localeCompare(b)
   );
 
@@ -174,7 +265,57 @@ function getRecordsWeekRange(records: Improvement[]) {
   };
 }
 
-function buildWeeklySeries(records: Improvement[]): WeeklyPoint[] {
+export function getLastCompletedWeekStart(now: Date) {
+  return addDays(startOfISOWeek(now), -7);
+}
+
+function getLastCompletedWeek(now: Date) {
+  const weekStart = toISODate(getLastCompletedWeekStart(now));
+  return {
+    weekStart,
+    weekKey: getWeekKey(parseISODateLocal(weekStart)),
+    weekLabel: getWeekLabelFromStart(weekStart)
+  };
+}
+
+function getLastCompletedWeeks(now: Date, count = 12) {
+  const last = getLastCompletedWeekStart(now);
+  const first = addDays(last, -(count - 1) * 7);
+  return getWeekStartsBetween(first, last).map((weekStart) => ({
+    weekStart,
+    weekKey: getWeekKey(parseISODateLocal(weekStart)),
+    weekLabel: getWeekLabelFromStart(weekStart)
+  }));
+}
+
+function getClubMeta(club: string) {
+  return {
+    color: CLUB_COLORS[club] ?? "#111827",
+    accent: CLUB_ACCENTS[club] ?? CLUB_COLORS[club] ?? "#111827",
+    logo: CLUB_LOGOS[club] ?? CLUB_LOGOS["Vivo 47"],
+    shortName: CLUB_SHORT_NAMES[club] ?? club
+  };
+}
+
+function getOfficialTeams(
+  club: string,
+  baseRecords: Improvement[],
+  countryUniverse: CountryUniverse = {}
+) {
+  const configured = countryUniverse[club] ?? [];
+  const fallback = baseRecords
+    .filter((record) => record.club === club)
+    .map((record) => record.team ?? "");
+  const source = configured.length ? configured : fallback;
+
+  return uniqueNormalized(source).sort((a, b) => a.localeCompare(b));
+}
+
+function getTeamKey(team: string) {
+  return normalizeKey(team);
+}
+
+function buildWeeklySeries(records: Improvement[], goal = GLOBAL_WEEKLY_GOAL): WeeklyPoint[] {
   const range = getRecordsWeekRange(records);
   if (!range) {
     return [];
@@ -190,31 +331,31 @@ function buildWeeklySeries(records: Improvement[]): WeeklyPoint[] {
         weekStart,
         weekLabel: getWeekLabelFromStart(weekStart),
         count,
-        goal: GLOBAL_WEEKLY_GOAL,
-        compliance: count / GLOBAL_WEEKLY_GOAL
+        goal,
+        compliance: count / goal
       };
     })
     .slice(-20);
 }
 
 function buildClubTotals(records: Improvement[]): ClubTotal[] {
-  return Array.from(countBy(records, (record) => record.club).entries())
-    .map(([club, count]) => {
-      const goal = CLUB_WEEKLY_GOALS[club] ?? null;
-      return {
-        club,
-        count,
-        goal,
-        compliance: goal ? count / goal : null,
-        color: CLUB_COLORS[club] ?? "#111827"
-      };
-    })
+  return ACTIVE_CLUBS.map((club) => {
+    const goal = CLUB_WEEKLY_GOALS[club] ?? null;
+    const count = records.filter((record) => record.club === club).length;
+    return {
+      club,
+      count,
+      goal,
+      compliance: goal ? count / goal : null,
+      ...getClubMeta(club)
+    };
+  })
+    .filter((item) => item.count > 0)
     .sort((a, b) => b.count - a.count || a.club.localeCompare(b.club));
 }
 
-function buildClubWeekSeries(records: Improvement[]) {
+function buildClubLineSeries(records: Improvement[]) {
   const weeklySeries = buildWeeklySeries(records).slice(-12);
-  const clubs = Array.from(new Set(records.map((record) => record.club))).sort();
   const byWeekClub = records.reduce<Map<string, CountMap>>((map, record) => {
     const byClub = map.get(record.weekStart) ?? new Map<string, number>();
     byClub.set(record.club, (byClub.get(record.club) ?? 0) + 1);
@@ -223,13 +364,13 @@ function buildClubWeekSeries(records: Improvement[]) {
   }, new Map());
 
   return {
-    clubWeekKeys: clubs,
+    clubWeekKeys: [...ACTIVE_CLUBS],
     clubWeekSeries: weeklySeries.map((week) => {
       const row: Record<string, string | number> = {
         weekLabel: week.weekLabel,
         weekStart: week.weekStart
       };
-      clubs.forEach((club) => {
+      ACTIVE_CLUBS.forEach((club) => {
         row[club] = byWeekClub.get(week.weekStart)?.get(club) ?? 0;
       });
       return row;
@@ -237,8 +378,174 @@ function buildClubWeekSeries(records: Improvement[]) {
   };
 }
 
-function getLastCompletedWeekStart(now: Date) {
-  return addDays(startOfISOWeek(now), -7);
+function buildCountryRankings(records: Improvement[], limit = 10): CountryRankingItem[] {
+  const grouped = records.reduce<Map<string, CountryRankingItem>>((map, record) => {
+    if (!record.team || !isVisibleClub(record.club)) {
+      return map;
+    }
+
+    const key = `${record.club}::${getTeamKey(record.team)}`;
+    const meta = getClubMeta(record.club);
+    const current =
+      map.get(key) ??
+      ({
+        name: record.team,
+        club: record.club,
+        count: 0,
+        color: meta.color,
+        logo: meta.logo,
+        shortName: meta.shortName
+      } as CountryRankingItem);
+    current.count += 1;
+    map.set(key, current);
+    return map;
+  }, new Map());
+
+  return Array.from(grouped.values())
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
+    .slice(0, limit);
+}
+
+function buildCountryStreaks(
+  records: Improvement[],
+  baseRecords: Improvement[],
+  countryUniverse: CountryUniverse,
+  now: Date,
+  limit = 5
+): CountryStreakItem[] {
+  const lastCompletedWeekStart = getLastCompletedWeekStart(now);
+  const completedWeeksRange = getRecordsWeekRange(
+    baseRecords.filter(
+      (record) => parseISODateLocal(record.weekStart) <= lastCompletedWeekStart
+    )
+  );
+
+  if (!completedWeeksRange) {
+    return [];
+  }
+
+  const weekStarts = getWeekStartsBetween(completedWeeksRange.first, lastCompletedWeekStart);
+  const counts = records.reduce<Map<string, CountMap>>((map, record) => {
+    if (!record.team || parseISODateLocal(record.weekStart) > lastCompletedWeekStart) {
+      return map;
+    }
+
+    const key = `${record.club}::${getTeamKey(record.team)}`;
+    const byWeek = map.get(key) ?? new Map<string, number>();
+    byWeek.set(record.weekStart, (byWeek.get(record.weekStart) ?? 0) + 1);
+    map.set(key, byWeek);
+    return map;
+  }, new Map());
+
+  const candidates = ACTIVE_CLUBS.flatMap((club) =>
+    getOfficialTeams(club, baseRecords, countryUniverse).map((team) => ({ club, team }))
+  );
+
+  return candidates
+    .map(({ club, team }) => {
+      const byWeek = counts.get(`${club}::${getTeamKey(team)}`) ?? new Map<string, number>();
+      let streak = 0;
+
+      for (let index = weekStarts.length - 1; index >= 0; index -= 1) {
+        if ((byWeek.get(weekStarts[index]) ?? 0) === 0) {
+          break;
+        }
+        streak += 1;
+      }
+
+      return {
+        team,
+        club,
+        streak,
+        ...getClubMeta(club)
+      };
+    })
+    .filter((item) => item.streak > 0)
+    .sort((a, b) => b.streak - a.streak || a.team.localeCompare(b.team))
+    .slice(0, limit);
+}
+
+function buildClubParticipation(
+  records: Improvement[],
+  baseRecords: Improvement[],
+  countryUniverse: CountryUniverse,
+  now: Date
+): ClubParticipationItem[] {
+  const lastCompleted = getLastCompletedWeek(now);
+  const lastWeekRecords = records.filter(
+    (record) => record.weekStart === lastCompleted.weekStart
+  );
+
+  return ACTIVE_CLUBS.map((club) => {
+    const goal = CLUB_WEEKLY_GOALS[club] ?? 1;
+    const teams = getOfficialTeams(club, baseRecords, countryUniverse);
+    const teamKeys = new Set(teams.map(getTeamKey));
+    const rawActiveTeams = uniqueNormalized(
+      lastWeekRecords
+        .filter((record) => record.club === club)
+        .map((record) => record.team ?? "")
+    );
+    const activeTeams = teams.length
+      ? rawActiveTeams.filter((team) => teamKeys.has(getTeamKey(team)))
+      : rawActiveTeams;
+    const lastWeekCount = lastWeekRecords.filter((record) => record.club === club).length;
+
+    return {
+      club,
+      goal,
+      ...getClubMeta(club),
+      lastCompletedWeekLabel: lastCompleted.weekLabel,
+      lastCompletedWeekStart: lastCompleted.weekStart,
+      lastWeekCount,
+      goalCompliance: lastWeekCount / goal,
+      activeTeams: activeTeams.length,
+      totalTeams: teams.length,
+      countryCompliance: teams.length ? activeTeams.length / teams.length : 0
+    };
+  });
+}
+
+function buildParticipationMatrix(
+  records: Improvement[],
+  baseRecords: Improvement[],
+  countryUniverse: CountryUniverse,
+  club: string,
+  now: Date
+) {
+  const weeks = getLastCompletedWeeks(now, 12);
+  const teams = getOfficialTeams(club, baseRecords, countryUniverse);
+  const counts = records.reduce<Map<string, CountMap>>((map, record) => {
+    if (record.club !== club || !record.team) {
+      return map;
+    }
+
+    const teamKey = getTeamKey(record.team);
+    const byWeek = map.get(teamKey) ?? new Map<string, number>();
+    byWeek.set(record.weekKey, (byWeek.get(record.weekKey) ?? 0) + 1);
+    map.set(teamKey, byWeek);
+    return map;
+  }, new Map());
+
+  return {
+    matrixWeeks: weeks,
+    participationMatrix: teams.map((team) => {
+      const byWeek = counts.get(getTeamKey(team)) ?? new Map<string, number>();
+      const cells = weeks.map((week) => {
+        const count = byWeek.get(week.weekKey) ?? 0;
+        return {
+          weekKey: week.weekKey,
+          count,
+          active: count > 0
+        };
+      });
+
+      return {
+        team,
+        activeWeeks: cells.filter((cell) => cell.active).length,
+        cells
+      };
+    })
+  };
 }
 
 function buildStreaks(records: Improvement[], now: Date): StreakItem[] {
@@ -247,118 +554,23 @@ function buildStreaks(records: Improvement[], now: Date): StreakItem[] {
     records.filter((record) => record.weekKey === currentWeekKey),
     (record) => record.club
   );
-  // Rachas: la semana en curso se excluye para no castigar avances incompletos.
-  const lastCompletedWeekStart = getLastCompletedWeekStart(now);
-  const completedRecords = records.filter(
-    (record) => parseISODateLocal(record.weekStart) <= lastCompletedWeekStart
-  );
-  const clubs = Array.from(
-    new Set([
-      ...Object.keys(CLUB_WEEKLY_GOALS),
-      ...records.map((record) => record.club)
-    ])
-  ).sort();
 
-  return clubs.map((club) => {
+  return ACTIVE_CLUBS.map((club) => {
     const goal = CLUB_WEEKLY_GOALS[club] ?? null;
     const currentWeekCount = currentWeekCounts.get(club) ?? 0;
-
-    if (!goal) {
-      return {
-        club,
-        goal,
-        streak: null,
-        currentWeekCount,
-        currentWeekCompliance: null,
-        fulfilledWeeks: 0,
-        missedWeeks: 0,
-        accumulatedCompliance: null,
-        color: CLUB_COLORS[club] ?? "#111827"
-      };
-    }
-
-    const clubRecords = completedRecords.filter((record) => record.club === club);
-    if (!clubRecords.length) {
-      return {
-        club,
-        goal,
-        streak: 0,
-        currentWeekCount,
-        currentWeekCompliance: currentWeekCount / goal,
-        fulfilledWeeks: 0,
-        missedWeeks: 0,
-        accumulatedCompliance: 0,
-        color: CLUB_COLORS[club] ?? "#111827"
-      };
-    }
-
-    const firstWeek = new Date(
-      Math.min(...clubRecords.map((record) => parseISODateLocal(record.weekStart).getTime()))
-    );
-    const weekStarts = getWeekStartsBetween(firstWeek, lastCompletedWeekStart);
-    const counts = countBy(clubRecords, (record) => record.weekStart);
-    const fulfilledFlags = weekStarts.map((weekStart) => (counts.get(weekStart) ?? 0) >= goal);
-
-    let streak = 0;
-    for (let index = fulfilledFlags.length - 1; index >= 0; index -= 1) {
-      if (!fulfilledFlags[index]) {
-        break;
-      }
-      streak += 1;
-    }
-
-    const fulfilledWeeks = fulfilledFlags.filter(Boolean).length;
-    const totalCount = weekStarts.reduce(
-      (sum, weekStart) => sum + (counts.get(weekStart) ?? 0),
-      0
-    );
 
     return {
       club,
       goal,
-      streak,
+      streak: null,
       currentWeekCount,
-      currentWeekCompliance: currentWeekCount / goal,
-      fulfilledWeeks,
-      missedWeeks: weekStarts.length - fulfilledWeeks,
-      accumulatedCompliance: totalCount / (weekStarts.length * goal),
+      currentWeekCompliance: goal ? currentWeekCount / goal : null,
+      fulfilledWeeks: 0,
+      missedWeeks: 0,
+      accumulatedCompliance: null,
       color: CLUB_COLORS[club] ?? "#111827"
     };
   });
-}
-
-function buildGlobalCompletion(records: Improvement[], now: Date) {
-  const lastCompletedWeekStart = getLastCompletedWeekStart(now);
-  const completedRecords = records.filter(
-    (record) => parseISODateLocal(record.weekStart) <= lastCompletedWeekStart
-  );
-
-  if (!completedRecords.length) {
-    return {
-      accumulatedCompliance: 0,
-      fulfilledWeeks: 0,
-      missedWeeks: 0
-    };
-  }
-
-  const firstWeek = new Date(
-    Math.min(...completedRecords.map((record) => parseISODateLocal(record.weekStart).getTime()))
-  );
-  const weekStarts = getWeekStartsBetween(firstWeek, lastCompletedWeekStart);
-  const counts = countBy(completedRecords, (record) => record.weekStart);
-  const fulfilledWeeks = weekStarts.filter(
-    (weekStart) => (counts.get(weekStart) ?? 0) >= GLOBAL_WEEKLY_GOAL
-  ).length;
-  const totalCount = weekStarts.reduce(
-    (sum, weekStart) => sum + (counts.get(weekStart) ?? 0),
-    0
-  );
-
-  return {
-    accumulatedCompliance: totalCount / (weekStarts.length * GLOBAL_WEEKLY_GOAL),
-    fulfilledWeeks,
-    missedWeeks: weekStarts.length - fulfilledWeeks
-  };
 }
 
 function buildDayActivity(records: Improvement[]): ActivityDay[] {
@@ -418,10 +630,9 @@ export function applyDashboardFilters(
 }
 
 export function buildFilterOptions(records: Improvement[]): FilterOptions {
-  const weeks = Array.from(new Map(records.map((record) => [
-    record.weekKey,
-    record.weekLabel
-  ])).entries())
+  const weeks = Array.from(
+    new Map(records.map((record) => [record.weekKey, record.weekLabel])).entries()
+  )
     .sort(([a], [b]) => b.localeCompare(a))
     .map(([value, label]) => ({ value, label }));
   const months = Array.from(new Set(records.map((record) => record.monthKey)))
@@ -445,46 +656,74 @@ export function buildFilterOptions(records: Improvement[]): FilterOptions {
 export function calculateDashboardMetrics(
   records: Improvement[],
   filters: DashboardFilters = DEFAULT_FILTERS,
-  now = new Date()
+  now = new Date(),
+  countryUniverse: CountryUniverse = {},
+  baseRecords = records
 ): DashboardMetrics {
+  const visibleRecords = filterVisibleRecords(records);
+  const visibleBaseRecords = filterVisibleRecords(baseRecords);
   const currentYear = now.getFullYear();
   const currentMonthKey = `${currentYear}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   const currentWeekKey = getWeekKey(now);
-  const currentWeekRecords = records.filter((record) => record.weekKey === currentWeekKey);
-  const hasSelectedClubGoal =
-    isActiveFilter(filters.club) &&
-    Object.prototype.hasOwnProperty.call(CLUB_WEEKLY_GOALS, filters.club);
-  const selectedClubGoal = hasSelectedClubGoal ? CLUB_WEEKLY_GOALS[filters.club] : undefined;
-  const weeklyGoal = hasSelectedClubGoal ? selectedClubGoal ?? null : GLOBAL_WEEKLY_GOAL;
-  const clubTotals = buildClubTotals(records);
-  const streaks = buildStreaks(records, now);
-  const globalCompletion = buildGlobalCompletion(records, now);
-  const clubWeek = buildClubWeekSeries(records);
-  const longestStreak =
-    streaks
-      .filter((item) => typeof item.streak === "number")
-      .sort((a, b) => (b.streak ?? 0) - (a.streak ?? 0))[0] ?? null;
+  const currentWeekRecords = visibleRecords.filter(
+    (record) => record.weekKey === currentWeekKey
+  );
+  const selectedClub =
+    isActiveFilter(filters.club) && isVisibleClub(filters.club) ? filters.club : undefined;
+  const selectedClubGoal = selectedClub ? CLUB_WEEKLY_GOALS[selectedClub] : undefined;
+  const weeklyGoal = selectedClubGoal ?? GLOBAL_WEEKLY_GOAL;
+  const clubTotals = buildClubTotals(visibleRecords);
+  const clubWeek = buildClubLineSeries(visibleRecords);
+  const streaks = buildStreaks(visibleRecords, now);
+  const activeClubForMatrix = selectedClub ?? (ACTIVE_CLUBS.find((club) =>
+    visibleRecords.some((record) => record.club === club)
+  ) as string | undefined);
+  const matrix = activeClubForMatrix
+    ? buildParticipationMatrix(
+        visibleRecords,
+        visibleBaseRecords,
+        countryUniverse,
+        activeClubForMatrix,
+        now
+      )
+    : { matrixWeeks: [], participationMatrix: [] };
 
   return {
-    totalYtd: records.filter((record) => record.year === currentYear).length,
-    currentMonth: records.filter((record) => record.monthKey === currentMonthKey).length,
+    totalYtd: visibleRecords.filter((record) => record.year === currentYear).length,
+    currentMonth: visibleRecords.filter((record) => record.monthKey === currentMonthKey).length,
     currentWeek: currentWeekRecords.length,
     weeklyCompliance: weeklyGoal ? currentWeekRecords.length / weeklyGoal : null,
     weeklyGoal,
     leadingClub: clubTotals[0] ?? null,
-    longestStreak,
-    accumulatedCompliance: globalCompletion.accumulatedCompliance,
-    fulfilledWeeks: globalCompletion.fulfilledWeeks,
-    missedWeeks: globalCompletion.missedWeeks,
-    weeklySeries: buildWeeklySeries(records),
+    longestStreak: null,
+    accumulatedCompliance: 0,
+    fulfilledWeeks: 0,
+    missedWeeks: 0,
+    weeklySeries: buildWeeklySeries(visibleRecords, weeklyGoal),
     clubTotals,
     clubWeekSeries: clubWeek.clubWeekSeries,
     clubWeekKeys: clubWeek.clubWeekKeys,
-    topCollaborators: rankBy(records, (record) => record.collaborator),
-    topTeams: rankBy(records, (record) => record.team),
-    categoryTotals: rankBy(records, (record) => record.category),
-    latest: [...records].sort(sortByDateDesc).slice(0, 12),
+    topCollaborators: rankBy(visibleRecords, (record) => record.collaborator),
+    topTeams: rankBy(visibleRecords, (record) => record.team),
+    topCountries: buildCountryRankings(visibleRecords, 10),
+    topCountryStreaks: buildCountryStreaks(
+      visibleRecords,
+      visibleBaseRecords,
+      countryUniverse,
+      now,
+      5
+    ),
+    categoryTotals: rankBy(visibleRecords, (record) => record.category),
+    latest: [...visibleRecords].sort(sortByDateDesc).slice(0, 12),
     streaks,
-    dayActivity: buildDayActivity(records)
+    clubParticipation: buildClubParticipation(
+      visibleRecords,
+      visibleBaseRecords,
+      countryUniverse,
+      now
+    ),
+    matrixWeeks: matrix.matrixWeeks,
+    participationMatrix: matrix.participationMatrix,
+    dayActivity: buildDayActivity(visibleRecords)
   };
 }

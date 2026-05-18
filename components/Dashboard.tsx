@@ -3,36 +3,42 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   BarChart3,
-  Building2,
   CalendarDays,
   CalendarRange,
   Database,
   Download,
-  Flame,
   RefreshCw,
   Target,
-  Trophy
+  Trophy,
+  Users
 } from "lucide-react";
-import { ActivityHeatmap } from "@/components/ActivityHeatmap";
-import { ClubBarChart } from "@/components/ClubBarChart";
-import { ClubWeekChart } from "@/components/ClubWeekChart";
-import { EmptyState } from "@/components/EmptyState";
-import { FiltersPanel } from "@/components/FiltersPanel";
-import { KpiCard } from "@/components/KpiCard";
-import { LatestImprovementsTable } from "@/components/LatestImprovementsTable";
-import { LoadingState } from "@/components/LoadingState";
-import { RankingTable } from "@/components/RankingTable";
-import { StreakPanel } from "@/components/StreakPanel";
-import { WeeklyLineChart } from "@/components/WeeklyLineChart";
-import { DEFAULT_FILTERS } from "@/lib/constants";
+import { ACTIVE_CLUBS, CLUB_LOGOS, DEFAULT_FILTERS } from "@/lib/constants";
 import { improvementsToCsv } from "@/lib/csv";
 import { formatNumber, formatPercent } from "@/lib/format";
 import {
   applyDashboardFilters,
   buildFilterOptions,
-  calculateDashboardMetrics
+  calculateDashboardMetrics,
+  filterVisibleRecords
 } from "@/lib/metrics";
-import type { DashboardFilters, FieldMap, Improvement } from "@/types/improvement";
+import { ClubBarChart } from "@/components/ClubBarChart";
+import { ClubParticipationPanel } from "@/components/ClubParticipationPanel";
+import { ClubWeekChart } from "@/components/ClubWeekChart";
+import { CountryCompliancePie } from "@/components/CountryCompliancePie";
+import { CountryRankingPanel } from "@/components/CountryRankingPanel";
+import { CountryStreakRanking } from "@/components/CountryStreakRanking";
+import { EmptyState } from "@/components/EmptyState";
+import { FiltersPanel } from "@/components/FiltersPanel";
+import { KpiCard } from "@/components/KpiCard";
+import { LoadingState } from "@/components/LoadingState";
+import { ParticipationMatrix } from "@/components/ParticipationMatrix";
+import { WeeklyLineChart } from "@/components/WeeklyLineChart";
+import type {
+  CountryUniverse,
+  DashboardFilters,
+  FieldMap,
+  Improvement
+} from "@/types/improvement";
 
 type ApiResponse = {
   source: "google-sheets" | "mock";
@@ -40,21 +46,49 @@ type ApiResponse = {
   rowCount: number;
   records: Improvement[];
   fieldMap: FieldMap;
+  countryUniverse?: CountryUniverse;
   warnings: string[];
 };
+
+type DashboardTab = "Vivo 47" | (typeof ACTIVE_CLUBS)[number];
+
+const tabs: DashboardTab[] = ["Vivo 47", ...ACTIVE_CLUBS];
 
 const sourceLabels = {
   "google-sheets": "Google Sheets",
   mock: "Mock local"
 };
 
+const generalFilterFields: Array<keyof DashboardFilters> = [
+  "dateFrom",
+  "dateTo",
+  "week",
+  "month",
+  "year"
+];
+
+const clubFilterFields: Array<keyof DashboardFilters> = [
+  "dateFrom",
+  "dateTo",
+  "team",
+  "week",
+  "month",
+  "year"
+];
+
+function tabLogo(tab: DashboardTab) {
+  return tab === "Vivo 47" ? CLUB_LOGOS["Vivo 47"] : CLUB_LOGOS[tab];
+}
+
 export function Dashboard() {
   const [records, setRecords] = useState<Improvement[]>([]);
   const [filters, setFilters] = useState<DashboardFilters>(DEFAULT_FILTERS);
+  const [activeTab, setActiveTab] = useState<DashboardTab>("Vivo 47");
   const [source, setSource] = useState<ApiResponse["source"]>("mock");
   const [generatedAt, setGeneratedAt] = useState("");
   const [warnings, setWarnings] = useState<string[]>([]);
   const [rowCount, setRowCount] = useState(0);
+  const [countryUniverse, setCountryUniverse] = useState<CountryUniverse>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -78,11 +112,12 @@ export function Dashboard() {
       setGeneratedAt(data.generatedAt);
       setWarnings(data.warnings ?? []);
       setRowCount(data.rowCount);
+      setCountryUniverse(data.countryUniverse ?? {});
     } catch (loadError) {
       setError(
         loadError instanceof Error
           ? loadError.message
-          : "No se pudo cargar la informacion."
+          : "No se pudo cargar la información."
       );
     } finally {
       setLoading(false);
@@ -93,21 +128,61 @@ export function Dashboard() {
     void loadData();
   }, [loadData]);
 
-  const filterOptions = useMemo(() => buildFilterOptions(records), [records]);
+  const visibleRecords = useMemo(() => filterVisibleRecords(records), [records]);
+  const viewRecords = useMemo(
+    () =>
+      activeTab === "Vivo 47"
+        ? visibleRecords
+        : visibleRecords.filter((record) => record.club === activeTab),
+    [activeTab, visibleRecords]
+  );
+  const filterOptions = useMemo(() => buildFilterOptions(viewRecords), [viewRecords]);
+  const appliedFilters = useMemo(
+    () => ({
+      ...filters,
+      club: "all",
+      collaborator: "all",
+      category: "all"
+    }),
+    [filters]
+  );
   const filteredRecords = useMemo(
-    () => applyDashboardFilters(records, filters),
-    [records, filters]
+    () => applyDashboardFilters(viewRecords, appliedFilters),
+    [viewRecords, appliedFilters]
+  );
+  const metricsFilters = useMemo(
+    () => ({
+      ...appliedFilters,
+      club: activeTab === "Vivo 47" ? "all" : activeTab
+    }),
+    [activeTab, appliedFilters]
   );
   const metrics = useMemo(
-    () => calculateDashboardMetrics(filteredRecords, filters),
-    [filteredRecords, filters]
+    () =>
+      calculateDashboardMetrics(
+        filteredRecords,
+        metricsFilters,
+        new Date(),
+        countryUniverse,
+        viewRecords
+      ),
+    [countryUniverse, filteredRecords, metricsFilters, viewRecords]
   );
+  const selectedClubParticipation =
+    activeTab === "Vivo 47"
+      ? undefined
+      : metrics.clubParticipation.find((item) => item.club === activeTab);
 
   const handleFilterChange = (key: keyof DashboardFilters, value: string) => {
     setFilters((current) => ({
       ...current,
       [key]: value
     }));
+  };
+
+  const handleTabChange = (tab: DashboardTab) => {
+    setActiveTab(tab);
+    setFilters(DEFAULT_FILTERS);
   };
 
   const exportCsv = () => {
@@ -137,6 +212,8 @@ export function Dashboard() {
     metrics.weeklyGoal === null
       ? `${formatNumber(metrics.currentWeek)} mejoras sin meta fija`
       : `${formatNumber(metrics.currentWeek)} de ${formatNumber(metrics.weeklyGoal)}`;
+  const countryLeader = metrics.topCountries[0];
+  const streakLeader = metrics.topCountryStreaks[0];
 
   return (
     <main className="min-h-screen">
@@ -147,12 +224,19 @@ export function Dashboard() {
               <Database aria-hidden className="h-4 w-4" />
               {sourceLabels[source]} · {formatNumber(rowCount)} filas fuente
             </div>
-            <h1 className="text-4xl font-semibold tracking-normal sm:text-5xl">
-              Dashboard Mejora del 1%
-            </h1>
-            <p className="mt-3 max-w-2xl text-base text-white/70 sm:text-lg">
-              Seguimiento de mejoras semanales Vivo 47
-            </p>
+            <div className="flex items-center gap-4">
+              <img alt="" className="h-16 w-16 object-contain" src={tabLogo(activeTab)} />
+              <div>
+                <h1 className="text-4xl font-semibold tracking-normal sm:text-5xl">
+                  Dashboard Mejora del 1%
+                </h1>
+                <p className="mt-3 max-w-2xl text-base text-white/70 sm:text-lg">
+                  {activeTab === "Vivo 47"
+                    ? "Seguimiento general de mejoras semanales Vivo 47"
+                    : `Seguimiento de mejoras semanales ${activeTab}`}
+                </p>
+              </div>
+            </div>
           </div>
           <div className="flex flex-wrap gap-3">
             <button
@@ -181,12 +265,35 @@ export function Dashboard() {
 
       <div className="-mt-20 px-4 pb-10 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-7xl space-y-6">
+          <nav className="rounded-lg border border-white/50 bg-white/95 p-2 shadow-soft backdrop-blur">
+            <div className="grid gap-2 sm:grid-cols-4">
+              {tabs.map((tab) => {
+                const active = activeTab === tab;
+                return (
+                  <button
+                    className={
+                      active
+                        ? "flex h-14 items-center justify-center gap-3 rounded-lg bg-ink-950 px-4 text-sm font-semibold text-white"
+                        : "flex h-14 items-center justify-center gap-3 rounded-lg px-4 text-sm font-semibold text-neutral-600 transition hover:bg-neutral-100"
+                    }
+                    key={tab}
+                    onClick={() => handleTabChange(tab)}
+                    type="button"
+                  >
+                    <img alt="" className="h-8 w-8 object-contain" src={tabLogo(tab)} />
+                    {tab === "Vivo 47" ? "Vivo 47" : tab}
+                  </button>
+                );
+              })}
+            </div>
+          </nav>
+
           <div className="flex flex-col gap-3 rounded-lg border border-white/50 bg-white/90 p-4 text-sm text-neutral-600 shadow-soft backdrop-blur md:flex-row md:items-center md:justify-between">
             <div className="flex items-center gap-2">
               <span className="h-2.5 w-2.5 rounded-full bg-vivo-600" />
               <span>
                 {formatNumber(filteredRecords.length)} mejoras visibles de{" "}
-                {formatNumber(records.length)} normalizadas
+                {formatNumber(viewRecords.length)} normalizadas
               </span>
             </div>
             <span>Actualizado: {updatedAt}</span>
@@ -203,6 +310,7 @@ export function Dashboard() {
             onChange={handleFilterChange}
             onReset={() => setFilters(DEFAULT_FILTERS)}
             options={filterOptions}
+            visibleFields={activeTab === "Vivo 47" ? generalFilterFields : clubFilterFields}
           />
 
           {loading && !records.length ? <LoadingState /> : null}
@@ -249,118 +357,95 @@ export function Dashboard() {
                 />
                 <KpiCard
                   helper={
-                    metrics.leadingClub
-                      ? `${formatNumber(metrics.leadingClub.count)} mejoras`
-                      : "Sin datos"
+                    activeTab === "Vivo 47"
+                      ? `${formatNumber(metrics.leadingClub?.count ?? 0)} mejoras`
+                      : `${formatNumber(countryLeader?.count ?? 0)} mejoras`
                   }
                   icon={Trophy}
-                  label="Club líder"
+                  label={activeTab === "Vivo 47" ? "Club líder" : "País líder"}
                   tone="dark"
-                  value={metrics.leadingClub?.club ?? "-"}
+                  value={
+                    activeTab === "Vivo 47"
+                      ? metrics.leadingClub?.club ?? "-"
+                      : countryLeader?.name ?? "-"
+                  }
                 />
                 <KpiCard
-                  helper={metrics.longestStreak?.club ?? "Sin racha"}
-                  icon={Flame}
-                  label="Racha más larga"
+                  helper={
+                    streakLeader
+                      ? `${streakLeader.club} · ${streakLeader.streak} semanas`
+                      : "Sin racha activa"
+                  }
+                  icon={Users}
+                  label="Racha país líder"
                   tone="green"
-                  value={`${metrics.longestStreak?.streak ?? 0} sem`}
+                  value={streakLeader?.team ?? "-"}
                 />
               </section>
 
-              <section className="grid gap-6 xl:grid-cols-3">
-                <div className="xl:col-span-2">
-                  <WeeklyLineChart data={metrics.weeklySeries} />
-                </div>
-                <ClubBarChart data={metrics.clubTotals} />
-              </section>
-
-              <section className="grid gap-6 xl:grid-cols-3">
-                <div className="xl:col-span-2">
-                  <ClubWeekChart
-                    clubKeys={metrics.clubWeekKeys}
-                    data={metrics.clubWeekSeries}
-                  />
-                </div>
-                <section className="rounded-lg border border-neutral-200 bg-ink-950 p-5 text-white shadow-soft">
-                  <div className="mb-6 flex items-center justify-between gap-4">
-                    <div>
-                      <h2 className="text-lg font-semibold">Cumplimiento acumulado</h2>
-                      <p className="mt-1 text-sm text-white/60">
-                        Semanas completas contra meta global.
-                      </p>
+              {activeTab === "Vivo 47" ? (
+                <>
+                  <section className="grid gap-6 xl:grid-cols-3">
+                    <div className="xl:col-span-2">
+                      <WeeklyLineChart
+                        data={metrics.weeklySeries}
+                        subtitle="Total Vivo 47 contra meta semanal de 31 mejoras."
+                        title="Tendencia Vivo 47"
+                      />
                     </div>
-                    <Building2 aria-hidden className="h-5 w-5 text-vivo-400" />
-                  </div>
-                  <p className="text-5xl font-semibold">
-                    {formatPercent(metrics.accumulatedCompliance)}
-                  </p>
-                  <div className="mt-6 grid grid-cols-2 gap-3">
-                    <div className="rounded-lg bg-white/[0.08] p-4">
-                      <p className="text-sm text-white/60">Cumplidas</p>
-                      <p className="mt-2 text-2xl font-semibold">
-                        {formatNumber(metrics.fulfilledWeeks)}
-                      </p>
-                    </div>
-                    <div className="rounded-lg bg-white/[0.08] p-4">
-                      <p className="text-sm text-white/60">No cumplidas</p>
-                      <p className="mt-2 text-2xl font-semibold">
-                        {formatNumber(metrics.missedWeeks)}
-                      </p>
-                    </div>
-                  </div>
-                </section>
-              </section>
+                    <ClubBarChart data={metrics.clubTotals} />
+                  </section>
 
-              <section className="grid gap-6 xl:grid-cols-3">
-                <StreakPanel streaks={metrics.streaks} />
-                <RankingTable
-                  emptyTitle="Sin ranking de colaboradores"
-                  items={metrics.topCollaborators}
-                  subtitle="Personas con mayor número de mejoras."
-                  title="Top colaboradores"
-                />
-                <RankingTable
-                  emptyTitle="Sin ranking de equipos"
-                  items={metrics.topTeams}
-                  subtitle="Equipos o áreas con más participación."
-                  title="Top equipos"
-                />
-              </section>
+                  <section className="grid gap-6 xl:grid-cols-3">
+                    <div className="xl:col-span-2">
+                      <ClubWeekChart
+                        clubKeys={metrics.clubWeekKeys}
+                        data={metrics.clubWeekSeries}
+                      />
+                    </div>
+                    <CountryStreakRanking items={metrics.topCountryStreaks} />
+                  </section>
 
-              <section className="grid gap-6 xl:grid-cols-3">
-                <ActivityHeatmap data={metrics.dayActivity} />
-                <RankingTable
-                  emptyTitle="Sin categorias"
-                  items={metrics.categoryTotals}
-                  subtitle="Tipos de impacto registrados."
-                  title="Categorías de mejora"
-                />
-                <div className="xl:col-span-1">
-                  <section className="rounded-lg border border-neutral-200 bg-white p-5 shadow-soft">
-                    <h2 className="text-lg font-semibold text-ink-950">Metas semanales</h2>
-                    <div className="mt-5 space-y-3 text-sm">
-                      <div className="flex justify-between border-b border-neutral-100 pb-3">
-                        <span>Naciones Unidas</span>
-                        <strong>11</strong>
-                      </div>
-                      <div className="flex justify-between border-b border-neutral-100 pb-3">
-                        <span>Valle Real</span>
-                        <strong>10</strong>
-                      </div>
-                      <div className="flex justify-between border-b border-neutral-100 pb-3">
-                        <span>Gourmetería</span>
-                        <strong>10</strong>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Oficina Central</span>
-                        <strong>sin fija</strong>
-                      </div>
+                  <section className="grid gap-6 xl:grid-cols-3">
+                    <CountryRankingPanel
+                      items={metrics.topCountries}
+                      subtitle="Países con más mejoras registradas."
+                      title="Top países"
+                    />
+                    <div className="xl:col-span-2">
+                      <ClubParticipationPanel items={metrics.clubParticipation} />
                     </div>
                   </section>
-                </div>
-              </section>
+                </>
+              ) : (
+                <>
+                  <section className="grid gap-6 xl:grid-cols-3">
+                    <div className="xl:col-span-2">
+                      <WeeklyLineChart
+                        data={metrics.weeklySeries}
+                        subtitle={`Avance semanal de ${activeTab} contra su meta.`}
+                        title={`Tendencia ${activeTab}`}
+                      />
+                    </div>
+                    <CountryCompliancePie item={selectedClubParticipation} />
+                  </section>
 
-              <LatestImprovementsTable records={metrics.latest} />
+                  <ParticipationMatrix
+                    color={selectedClubParticipation?.color ?? "#12b96a"}
+                    rows={metrics.participationMatrix}
+                    weeks={metrics.matrixWeeks}
+                  />
+
+                  <section className="grid gap-6 xl:grid-cols-2">
+                    <CountryRankingPanel
+                      items={metrics.topCountries}
+                      subtitle="Países con más mejoras dentro del club."
+                      title="Ranking de países"
+                    />
+                    <CountryStreakRanking items={metrics.topCountryStreaks} />
+                  </section>
+                </>
+              )}
             </>
           ) : null}
         </div>

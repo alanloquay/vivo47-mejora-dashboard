@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
-import { fetchRowsFromGoogleSheets, hasGoogleSheetsConfig } from "@/lib/googleSheets";
+import {
+  fetchDashboardDataFromGoogleSheets,
+  hasGoogleSheetsConfig
+} from "@/lib/googleSheets";
 import { MOCK_ROWS } from "@/lib/mockData";
 import { normalizeSheetRows } from "@/lib/normalizeData";
+import type { CountryUniverse } from "@/types/improvement";
 
 export const dynamic = "force-dynamic";
 
@@ -10,13 +14,17 @@ export async function GET() {
   const useMock = forceMock || !hasGoogleSheetsConfig();
 
   try {
-    const rawRows = useMock ? MOCK_ROWS : await fetchRowsFromGoogleSheets();
+    const sheetData = useMock
+      ? { rows: MOCK_ROWS, countryUniverse: {} as CountryUniverse }
+      : await fetchDashboardDataFromGoogleSheets();
+    const rawRows = sheetData.rows;
     const normalized = normalizeSheetRows(rawRows);
 
     return NextResponse.json({
       source: useMock ? "mock" : "google-sheets",
       generatedAt: new Date().toISOString(),
       rowCount: rawRows.length,
+      countryUniverse: sheetData.countryUniverse,
       ...normalized,
       warnings: [
         ...normalized.warnings,

@@ -76,3 +76,5 @@ export type FilterOptions = {
   months: SelectOption[];
   years: SelectOption[];
 };
+
+export type CountryUniverse = Record<string, string[]>;
