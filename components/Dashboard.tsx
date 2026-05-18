@@ -12,7 +12,7 @@ import {
   Trophy,
   Users
 } from "lucide-react";
-import { ACTIVE_CLUBS, CLUB_LOGOS, DEFAULT_FILTERS } from "@/lib/constants";
+import { ACTIVE_CLUBS, CLUB_COLORS, CLUB_LOGOS, DEFAULT_FILTERS } from "@/lib/constants";
 import { improvementsToCsv } from "@/lib/csv";
 import { formatNumber, formatPercent } from "@/lib/format";
 import {
@@ -67,17 +67,22 @@ const generalFilterFields: Array<keyof DashboardFilters> = [
   "year"
 ];
 
-const clubFilterFields: Array<keyof DashboardFilters> = [
-  "dateFrom",
-  "dateTo",
-  "team",
-  "week",
-  "month",
-  "year"
-];
-
 function tabLogo(tab: DashboardTab) {
   return tab === "Vivo 47" ? CLUB_LOGOS["Vivo 47"] : CLUB_LOGOS[tab];
+}
+
+function viewBackground(tab: DashboardTab) {
+  if (tab === "Vivo 47") {
+    return "linear-gradient(180deg, #e8f7ef 0%, #f7faf8 48%, #eef3ef 100%)";
+  }
+
+  const subtle: Record<string, string> = {
+    "Naciones Unidas": "linear-gradient(180deg, #eaf2ff 0%, #f7faff 46%, #edf4ff 100%)",
+    "Gourmetería": "linear-gradient(180deg, #fff0f0 0%, #fffafa 46%, #fff1f1 100%)",
+    "Valle Real": "linear-gradient(180deg, #fff8db 0%, #fffdf3 46%, #fff7d6 100%)"
+  };
+
+  return subtle[tab] ?? "#f5f6f4";
 }
 
 export function Dashboard() {
@@ -216,11 +221,11 @@ export function Dashboard() {
   const streakLeader = metrics.topCountryStreaks[0];
 
   return (
-    <main className="min-h-screen">
-      <header className="px-4 pb-28 pt-8 text-white sm:px-6 lg:px-8">
+    <main className="min-h-screen" style={{ background: viewBackground(activeTab) }}>
+      <header className="px-4 pb-28 pt-8 text-ink-950 sm:px-6 lg:px-8">
         <div className="mx-auto flex max-w-7xl flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <div className="mb-4 inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/10 px-3 py-1.5 text-sm text-white/80">
+            <div className="mb-4 inline-flex items-center gap-2 rounded-lg border border-white/70 bg-white/80 px-3 py-1.5 text-sm text-neutral-700 shadow-soft">
               <Database aria-hidden className="h-4 w-4" />
               {sourceLabels[source]} · {formatNumber(rowCount)} filas fuente
             </div>
@@ -230,7 +235,7 @@ export function Dashboard() {
                 <h1 className="text-4xl font-semibold tracking-normal sm:text-5xl">
                   Dashboard Mejora del 1%
                 </h1>
-                <p className="mt-3 max-w-2xl text-base text-white/70 sm:text-lg">
+                <p className="mt-3 max-w-2xl text-base text-neutral-700 sm:text-lg">
                   {activeTab === "Vivo 47"
                     ? "Seguimiento general de mejoras semanales Vivo 47"
                     : `Seguimiento de mejoras semanales ${activeTab}`}
@@ -240,7 +245,7 @@ export function Dashboard() {
           </div>
           <div className="flex flex-wrap gap-3">
             <button
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-white/20 bg-white/10 px-4 text-sm font-semibold text-white transition hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-neutral-200 bg-white/85 px-4 text-sm font-semibold text-ink-950 shadow-soft transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
               disabled={loading}
               onClick={() => void loadData()}
               title="Refrescar datos"
@@ -250,7 +255,7 @@ export function Dashboard() {
               Refrescar
             </button>
             <button
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-vivo-600 px-4 text-sm font-semibold text-white transition hover:bg-vivo-700 disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-vivo-600 px-4 text-sm font-semibold text-white shadow-soft transition hover:bg-vivo-700 disabled:cursor-not-allowed disabled:opacity-60"
               disabled={!filteredRecords.length}
               onClick={exportCsv}
               title="Exportar CSV"
@@ -305,13 +310,15 @@ export function Dashboard() {
             </div>
           ) : null}
 
-          <FiltersPanel
-            filters={filters}
-            onChange={handleFilterChange}
-            onReset={() => setFilters(DEFAULT_FILTERS)}
-            options={filterOptions}
-            visibleFields={activeTab === "Vivo 47" ? generalFilterFields : clubFilterFields}
-          />
+          {activeTab === "Vivo 47" ? (
+            <FiltersPanel
+              filters={filters}
+              onChange={handleFilterChange}
+              onReset={() => setFilters(DEFAULT_FILTERS)}
+              options={filterOptions}
+              visibleFields={generalFilterFields}
+            />
+          ) : null}
 
           {loading && !records.length ? <LoadingState /> : null}
 
@@ -345,7 +352,7 @@ export function Dashboard() {
                 <KpiCard
                   helper={`Meta ${weeklyGoalLabel}`}
                   icon={Target}
-                  label="Mejoras esta semana"
+                  label="Última semana"
                   tone="green"
                   value={formatNumber(metrics.currentWeek)}
                 />
@@ -423,6 +430,7 @@ export function Dashboard() {
                     <div className="xl:col-span-2">
                       <WeeklyLineChart
                         data={metrics.weeklySeries}
+                        color={CLUB_COLORS[activeTab] ?? "#12b96a"}
                         subtitle={`Avance semanal de ${activeTab} contra su meta.`}
                         title={`Tendencia ${activeTab}`}
                       />

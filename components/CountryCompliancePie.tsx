@@ -17,13 +17,15 @@ export function CountryCompliancePie({ item }: { item?: ClubParticipationItem })
   }
 
   const value = Math.min(item.countryCompliance, 1);
-  const data = [
-    { name: "Países activos", value: item.activeTeams },
-    { name: "Pendientes", value: Math.max(item.totalTeams - item.activeTeams, 0) }
-  ];
+  const data = item.totalTeams
+    ? [
+        { name: "Países activos", value: item.activeTeams },
+        { name: "Pendientes", value: Math.max(item.totalTeams - item.activeTeams, 0) }
+      ]
+    : [{ name: "Sin países configurados", value: 1 }];
 
   return (
-    <section className="rounded-lg border border-neutral-200 bg-white p-5 shadow-soft">
+    <section className="rounded-lg border border-neutral-200 bg-white p-6 shadow-soft">
       <div className="mb-4 flex items-start justify-between gap-4">
         <div>
           <h2 className="text-lg font-semibold text-ink-950">Cumplimiento de países</h2>
@@ -45,20 +47,19 @@ export function CountryCompliancePie({ item }: { item?: ClubParticipationItem })
           </div>
         </div>
       </div>
-      <div className="grid items-center gap-4 sm:grid-cols-[1fr_1.15fr]">
-        <div className="h-56">
+      <div className="grid items-center gap-6 lg:grid-cols-[1fr_1fr]">
+        <div className="h-72 min-w-0">
           <ResponsiveContainer height="100%" width="100%">
             <PieChart>
               <Pie
                 data={data}
                 dataKey="value"
-                endAngle={-270}
-                innerRadius={64}
-                outerRadius={88}
-                paddingAngle={2}
+                endAngle={450}
+                innerRadius={78}
+                outerRadius={110}
                 startAngle={90}
               >
-                <Cell fill={item.color} />
+                <Cell fill={item.totalTeams ? item.color : "#e5e7eb"} />
                 <Cell fill="#e5e7eb" />
               </Pie>
               <Tooltip />

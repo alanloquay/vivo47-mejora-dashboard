@@ -170,6 +170,30 @@ function uniqueNormalized(values: string[]) {
   });
 }
 
+function isValidTeamName(value: string, club?: string) {
+  const normalized = normalizeKey(value);
+  const invalid = [
+    "",
+    "sucursal",
+    "club",
+    "pais",
+    "paises",
+    "equipo",
+    "semana",
+    "area",
+    "departamento",
+    "gourmeteria",
+    "naciones unidas",
+    "valle real",
+    "oficina central",
+    "gmt",
+    "nac",
+    "vr"
+  ];
+
+  return !invalid.includes(normalized) && (!club || normalized !== normalizeKey(club));
+}
+
 export function isVisibleClub(club: string) {
   return ACTIVE_CLUBS.includes(club as (typeof ACTIVE_CLUBS)[number]);
 }
@@ -302,11 +326,14 @@ function getOfficialTeams(
   baseRecords: Improvement[],
   countryUniverse: CountryUniverse = {}
 ) {
-  const configured = countryUniverse[club] ?? [];
+  const configured = uniqueNormalized(countryUniverse[club] ?? []).filter((team) =>
+    isValidTeamName(team, club)
+  );
   const fallback = baseRecords
     .filter((record) => record.club === club)
-    .map((record) => record.team ?? "");
-  const source = configured.length ? configured : fallback;
+    .map((record) => record.team ?? "")
+    .filter((team) => isValidTeamName(team, club));
+  const source = configured.length >= 3 ? configured : fallback;
 
   return uniqueNormalized(source).sort((a, b) => a.localeCompare(b));
 }
@@ -380,7 +407,11 @@ function buildClubLineSeries(records: Improvement[]) {
 
 function buildCountryRankings(records: Improvement[], limit = 10): CountryRankingItem[] {
   const grouped = records.reduce<Map<string, CountryRankingItem>>((map, record) => {
-    if (!record.team || !isVisibleClub(record.club)) {
+    if (
+      !record.team ||
+      !isVisibleClub(record.club) ||
+      !isValidTeamName(record.team, record.club)
+    ) {
       return map;
     }
 
@@ -427,6 +458,9 @@ function buildCountryStreaks(
   const weekStarts = getWeekStartsBetween(completedWeeksRange.first, lastCompletedWeekStart);
   const counts = records.reduce<Map<string, CountMap>>((map, record) => {
     if (!record.team || parseISODateLocal(record.weekStart) > lastCompletedWeekStart) {
+      return map;
+    }
+    if (!isValidTeamName(record.team, record.club)) {
       return map;
     }
 
@@ -516,6 +550,9 @@ function buildParticipationMatrix(
   const teams = getOfficialTeams(club, baseRecords, countryUniverse);
   const counts = records.reduce<Map<string, CountMap>>((map, record) => {
     if (record.club !== club || !record.team) {
+      return map;
+    }
+    if (!isValidTeamName(record.team, club)) {
       return map;
     }
 
@@ -664,9 +701,9 @@ export function calculateDashboardMetrics(
   const visibleBaseRecords = filterVisibleRecords(baseRecords);
   const currentYear = now.getFullYear();
   const currentMonthKey = `${currentYear}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-  const currentWeekKey = getWeekKey(now);
-  const currentWeekRecords = visibleRecords.filter(
-    (record) => record.weekKey === currentWeekKey
+  const lastCompleted = getLastCompletedWeek(now);
+  const lastCompletedWeekRecords = visibleRecords.filter(
+    (record) => record.weekStart === lastCompleted.weekStart
   );
   const selectedClub =
     isActiveFilter(filters.club) && isVisibleClub(filters.club) ? filters.club : undefined;
@@ -691,8 +728,8 @@ export function calculateDashboardMetrics(
   return {
     totalYtd: visibleRecords.filter((record) => record.year === currentYear).length,
     currentMonth: visibleRecords.filter((record) => record.monthKey === currentMonthKey).length,
-    currentWeek: currentWeekRecords.length,
-    weeklyCompliance: weeklyGoal ? currentWeekRecords.length / weeklyGoal : null,
+    currentWeek: lastCompletedWeekRecords.length,
+    weeklyCompliance: weeklyGoal ? lastCompletedWeekRecords.length / weeklyGoal : null,
     weeklyGoal,
     leadingClub: clubTotals[0] ?? null,
     longestStreak: null,

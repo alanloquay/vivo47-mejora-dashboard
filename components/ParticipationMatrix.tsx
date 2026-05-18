@@ -59,11 +59,11 @@ export function ParticipationMatrix({
                 {row.cells.map((cell) => (
                   <td className="border-b border-neutral-100 p-1.5" key={cell.weekKey}>
                     <div
-                      className="mx-auto flex h-8 w-10 items-center justify-center rounded-md border text-xs font-semibold"
+                      className="mx-auto flex h-8 w-10 items-center justify-center rounded-sm border text-xs font-semibold"
                       style={{
-                        backgroundColor: cell.active ? color : "#f8fafc",
-                        borderColor: cell.active ? color : "#e5e7eb",
-                        color: cell.active ? "#ffffff" : "#9ca3af"
+                        backgroundColor: cell.active ? "#16a34a" : "#ffffff",
+                        borderColor: cell.active ? "#16a34a" : "#d1d5db",
+                        color: cell.active ? "#ffffff" : "#ffffff"
                       }}
                       title={
                         cell.active

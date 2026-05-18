@@ -16,11 +16,13 @@ import { EmptyState } from "@/components/EmptyState";
 export function WeeklyLineChart({
   data,
   title = "Mejoras por semana",
-  subtitle = "Avance semanal contra meta."
+  subtitle = "Avance semanal contra meta.",
+  color = "#12b96a"
 }: {
   data: WeeklyPoint[];
   title?: string;
   subtitle?: string;
+  color?: string;
 }) {
   if (!data.length) {
     return (
@@ -59,7 +61,7 @@ export function WeeklyLineChart({
               dataKey="count"
               dot={{ r: 3 }}
               name="Mejoras"
-              stroke="#12b96a"
+              stroke={color}
               strokeWidth={3}
               type="monotone"
             />
