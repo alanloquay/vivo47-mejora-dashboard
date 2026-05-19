@@ -332,17 +332,16 @@ function getPreviousMonthInfo(now: Date) {
   };
 }
 
-function getCompleteWeekStartsInsideMonth(now: Date) {
+function getWeekStartsTouchingPreviousMonth(now: Date) {
   const previousMonth = getPreviousMonthInfo(now);
   const starts: string[] = [];
   const cursor = startOfISOWeek(previousMonth.firstDay);
   cursor.setHours(0, 0, 0, 0);
+  const lastWeekStart = startOfISOWeek(previousMonth.lastDay);
+  lastWeekStart.setHours(0, 0, 0, 0);
 
-  while (cursor <= previousMonth.lastDay) {
-    const weekEnd = addDays(cursor, 6);
-    if (cursor >= previousMonth.firstDay && weekEnd <= previousMonth.lastDay) {
-      starts.push(toISODate(cursor));
-    }
+  while (cursor <= lastWeekStart) {
+    starts.push(toISODate(cursor));
     cursor.setDate(cursor.getDate() + 7);
   }
 
@@ -552,7 +551,7 @@ function buildClubParticipation(
   now: Date
 ): ClubParticipationItem[] {
   const lastCompleted = getLastCompletedWeek(now);
-  const previousMonth = getCompleteWeekStartsInsideMonth(now);
+  const previousMonth = getWeekStartsTouchingPreviousMonth(now);
   const lastWeekRecords = records.filter(
     (record) => record.weekStart === lastCompleted.weekStart
   );
@@ -613,7 +612,7 @@ function buildClubParticipation(
         teams.length && previousMonth.weekStarts.length
           ? monthlyCompliantTeams / teams.length
           : 0,
-      monthlyWeeks: previousMonth.weekStarts
+      monthlyWeeks: previousMonth.weekStarts.map(getWeekLabelFromStart)
     };
   });
 }

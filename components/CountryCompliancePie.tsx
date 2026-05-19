@@ -13,6 +13,7 @@ type DonutMetric = {
   percent: number;
   subtitle: string;
   total: number;
+  weeks?: string[];
 };
 
 function ComplianceDonut({ metric }: { metric: DonutMetric }) {
@@ -53,6 +54,11 @@ function ComplianceDonut({ metric }: { metric: DonutMetric }) {
         <p className="mt-3 text-xl font-semibold text-ink-950">
           {formatNumber(metric.active)} / {formatNumber(metric.total)} países
         </p>
+        {metric.weeks?.length ? (
+          <p className="mt-3 text-xs font-medium text-neutral-500">
+            Semanas consideradas: {metric.weeks.join(", ")}
+          </p>
+        ) : null}
       </div>
     </div>
   );
@@ -82,7 +88,8 @@ export function CountryCompliancePie({ item }: { item?: ClubParticipationItem })
     label: "Mensual",
     percent: item.monthlyCountryCompliance,
     subtitle: `Mes anterior: ${item.previousMonthLabel}`,
-    total: item.monthlyTotalTeams
+    total: item.monthlyTotalTeams,
+    weeks: item.monthlyWeeks
   };
 
   return (
@@ -108,7 +115,7 @@ export function CountryCompliancePie({ item }: { item?: ClubParticipationItem })
           <div className="pointer-events-none absolute right-0 top-11 z-10 hidden w-80 rounded-lg border border-neutral-200 bg-white p-3 text-sm text-neutral-600 shadow-soft group-hover:block">
             El semanal mide cuántos países subieron al menos una mejora en la última semana
             completa. El mensual mide cuántos países subieron al menos una mejora en cada
-            semana completa del mes anterior.
+            semana ISO que toca el mes anterior, aunque la semana cruce con otro mes.
           </div>
         </div>
       </div>
