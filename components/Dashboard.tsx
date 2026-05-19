@@ -441,7 +441,6 @@ export function Dashboard() {
                   </section>
 
                   <ParticipationMatrix
-                    color={selectedClubParticipation?.color ?? "#12b96a"}
                     rows={metrics.participationMatrix}
                     weeks={metrics.matrixWeeks}
                   />

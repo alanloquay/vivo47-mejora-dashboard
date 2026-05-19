@@ -6,12 +6,10 @@ import { EmptyState } from "@/components/EmptyState";
 
 export function ParticipationMatrix({
   rows,
-  weeks,
-  color
+  weeks
 }: {
   rows: ParticipationMatrixRow[];
   weeks: ParticipationMatrixWeek[];
-  color: string;
 }) {
   if (!rows.length || !weeks.length) {
     return (
@@ -62,14 +60,13 @@ export function ParticipationMatrix({
                       className="mx-auto h-5 w-8 rounded-sm border"
                       style={{
                         backgroundColor: cell.active ? "#16a34a" : "#ffffff",
-                        borderColor: cell.active ? "#16a34a" : "#d1d5db",
+                        borderColor: cell.active ? "#16a34a" : "#d1d5db"
                       }}
                       title={
                         cell.active
                           ? `${cell.count} mejora(s) registradas`
                           : "Sin mejora registrada"
                       }
-                    >
                     />
                   </td>
                 ))}
