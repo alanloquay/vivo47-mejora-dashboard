@@ -426,8 +426,8 @@ export function Dashboard() {
                 </>
               ) : (
                 <>
-                  <section className="grid gap-6 xl:grid-cols-3">
-                    <div className="xl:col-span-2">
+                  <section className="grid gap-6 2xl:grid-cols-5">
+                    <div className="2xl:col-span-3">
                       <WeeklyLineChart
                         data={metrics.weeklySeries}
                         color={CLUB_COLORS[activeTab] ?? "#12b96a"}
@@ -435,7 +435,9 @@ export function Dashboard() {
                         title={`Tendencia ${activeTab}`}
                       />
                     </div>
-                    <CountryCompliancePie item={selectedClubParticipation} />
+                    <div className="2xl:col-span-2">
+                      <CountryCompliancePie item={selectedClubParticipation} />
+                    </div>
                   </section>
 
                   <ParticipationMatrix

@@ -47,16 +47,16 @@ export function CountryCompliancePie({ item }: { item?: ClubParticipationItem })
           </div>
         </div>
       </div>
-      <div className="grid items-center gap-6 lg:grid-cols-[1fr_1fr]">
-        <div className="h-72 min-w-0">
+      <div className="grid items-center gap-8 xl:grid-cols-[1.15fr_1fr]">
+        <div className="h-80 min-w-0">
           <ResponsiveContainer height="100%" width="100%">
             <PieChart>
               <Pie
                 data={data}
                 dataKey="value"
                 endAngle={450}
-                innerRadius={78}
-                outerRadius={110}
+                innerRadius={90}
+                outerRadius={126}
                 startAngle={90}
               >
                 <Cell fill={item.totalTeams ? item.color : "#e5e7eb"} />
@@ -66,13 +66,13 @@ export function CountryCompliancePie({ item }: { item?: ClubParticipationItem })
             </PieChart>
           </ResponsiveContainer>
         </div>
-        <div>
-          <img alt="" className="mb-4 h-14 w-14 object-contain" src={item.logo} />
-          <p className="text-5xl font-semibold text-ink-950">{formatPercent(value)}</p>
-          <p className="mt-2 text-lg font-semibold text-ink-950">
+        <div className="min-w-0">
+          <img alt="" className="mb-5 h-16 w-16 object-contain" src={item.logo} />
+          <p className="text-6xl font-semibold text-ink-950">{formatPercent(value)}</p>
+          <p className="mt-3 text-xl font-semibold text-ink-950">
             {formatNumber(item.activeTeams)} / {formatNumber(item.totalTeams)} países
           </p>
-          <p className="mt-2 text-sm text-neutral-500">
+          <p className="mt-3 max-w-xs text-sm leading-6 text-neutral-500">
             Participaron con al menos una mejora registrada.
           </p>
         </div>

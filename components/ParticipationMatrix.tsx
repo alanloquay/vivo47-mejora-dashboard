@@ -34,18 +34,18 @@ export function ParticipationMatrix({
         <table className="min-w-full border-separate border-spacing-0 text-sm">
           <thead>
             <tr>
-              <th className="sticky left-0 z-10 border-b border-neutral-200 bg-white pb-3 pr-4 text-left font-semibold text-ink-950">
+              <th className="sticky left-0 z-10 border-b border-neutral-200 bg-white pb-2 pr-4 text-left font-semibold text-ink-950">
                 País
               </th>
               {weeks.map((week) => (
                 <th
-                  className="border-b border-neutral-200 px-2 pb-3 text-center text-xs font-semibold text-neutral-500"
+                  className="border-b border-neutral-200 px-1.5 pb-2 text-center text-xs font-semibold text-neutral-500"
                   key={week.weekKey}
                 >
                   {week.weekLabel.replace(" 2026", "")}
                 </th>
               ))}
-              <th className="border-b border-neutral-200 pb-3 pl-4 text-right text-xs font-semibold text-neutral-500">
+              <th className="border-b border-neutral-200 pb-2 pl-4 text-right text-xs font-semibold text-neutral-500">
                 Activas
               </th>
             </tr>
@@ -53,17 +53,16 @@ export function ParticipationMatrix({
           <tbody>
             {rows.map((row) => (
               <tr key={row.team}>
-                <td className="sticky left-0 z-10 border-b border-neutral-100 bg-white py-2 pr-4 font-medium text-ink-950">
+                <td className="sticky left-0 z-10 border-b border-neutral-100 bg-white py-1.5 pr-4 font-medium text-ink-950">
                   {row.team}
                 </td>
                 {row.cells.map((cell) => (
-                  <td className="border-b border-neutral-100 p-1.5" key={cell.weekKey}>
+                  <td className="border-b border-neutral-100 p-1" key={cell.weekKey}>
                     <div
-                      className="mx-auto flex h-8 w-10 items-center justify-center rounded-sm border text-xs font-semibold"
+                      className="mx-auto h-5 w-8 rounded-sm border"
                       style={{
                         backgroundColor: cell.active ? "#16a34a" : "#ffffff",
                         borderColor: cell.active ? "#16a34a" : "#d1d5db",
-                        color: cell.active ? "#ffffff" : "#ffffff"
                       }}
                       title={
                         cell.active
@@ -71,11 +70,10 @@ export function ParticipationMatrix({
                           : "Sin mejora registrada"
                       }
                     >
-                      {cell.active ? cell.count : ""}
-                    </div>
+                    />
                   </td>
                 ))}
-                <td className="border-b border-neutral-100 py-2 pl-4 text-right font-semibold text-ink-950">
+                <td className="border-b border-neutral-100 py-1.5 pl-4 text-right font-semibold text-ink-950">
                   {row.activeWeeks}/12
                 </td>
               </tr>

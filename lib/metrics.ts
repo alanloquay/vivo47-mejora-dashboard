@@ -342,14 +342,20 @@ function getTeamKey(team: string) {
   return normalizeKey(team);
 }
 
-function buildWeeklySeries(records: Improvement[], goal = GLOBAL_WEEKLY_GOAL): WeeklyPoint[] {
+function buildWeeklySeries(
+  records: Improvement[],
+  goal = GLOBAL_WEEKLY_GOAL,
+  now?: Date
+): WeeklyPoint[] {
   const range = getRecordsWeekRange(records);
   if (!range) {
     return [];
   }
 
+  const lastAllowedWeekStart = now ? getLastCompletedWeekStart(now) : range.last;
+  const lastWeek = range.last > lastAllowedWeekStart ? lastAllowedWeekStart : range.last;
   const byWeek = countBy(records, (record) => record.weekStart);
-  return getWeekStartsBetween(range.first, range.last)
+  return getWeekStartsBetween(range.first, lastWeek)
     .map((weekStart) => {
       const weekKey = getWeekKey(parseISODateLocal(weekStart));
       const count = byWeek.get(weekStart) ?? 0;
@@ -381,8 +387,8 @@ function buildClubTotals(records: Improvement[]): ClubTotal[] {
     .sort((a, b) => b.count - a.count || a.club.localeCompare(b.club));
 }
 
-function buildClubLineSeries(records: Improvement[]) {
-  const weeklySeries = buildWeeklySeries(records).slice(-12);
+function buildClubLineSeries(records: Improvement[], now: Date) {
+  const weeklySeries = buildWeeklySeries(records, GLOBAL_WEEKLY_GOAL, now).slice(-12);
   const byWeekClub = records.reduce<Map<string, CountMap>>((map, record) => {
     const byClub = map.get(record.weekStart) ?? new Map<string, number>();
     byClub.set(record.club, (byClub.get(record.club) ?? 0) + 1);
@@ -710,7 +716,7 @@ export function calculateDashboardMetrics(
   const selectedClubGoal = selectedClub ? CLUB_WEEKLY_GOALS[selectedClub] : undefined;
   const weeklyGoal = selectedClubGoal ?? GLOBAL_WEEKLY_GOAL;
   const clubTotals = buildClubTotals(visibleRecords);
-  const clubWeek = buildClubLineSeries(visibleRecords);
+  const clubWeek = buildClubLineSeries(visibleRecords, now);
   const streaks = buildStreaks(visibleRecords, now);
   const activeClubForMatrix = selectedClub ?? (ACTIVE_CLUBS.find((club) =>
     visibleRecords.some((record) => record.club === club)
@@ -736,7 +742,7 @@ export function calculateDashboardMetrics(
     accumulatedCompliance: 0,
     fulfilledWeeks: 0,
     missedWeeks: 0,
-    weeklySeries: buildWeeklySeries(visibleRecords, weeklyGoal),
+    weeklySeries: buildWeeklySeries(visibleRecords, weeklyGoal, now),
     clubTotals,
     clubWeekSeries: clubWeek.clubWeekSeries,
     clubWeekKeys: clubWeek.clubWeekKeys,
