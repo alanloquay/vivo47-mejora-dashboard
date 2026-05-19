@@ -80,6 +80,11 @@ export type ClubParticipationItem = {
   activeTeams: number;
   totalTeams: number;
   countryCompliance: number;
+  previousMonthLabel: string;
+  monthlyCompliantTeams: number;
+  monthlyTotalTeams: number;
+  monthlyCountryCompliance: number;
+  monthlyWeeks: string[];
 };
 
 export type ParticipationMatrixWeek = {
@@ -312,6 +317,41 @@ function getLastCompletedWeeks(now: Date, count = 12) {
   }));
 }
 
+function getPreviousMonthInfo(now: Date) {
+  const firstDay = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const lastDay = new Date(now.getFullYear(), now.getMonth(), 0);
+  const label = new Intl.DateTimeFormat("es-MX", {
+    month: "long",
+    year: "numeric"
+  }).format(firstDay);
+
+  return {
+    firstDay,
+    lastDay,
+    label: label.charAt(0).toUpperCase() + label.slice(1)
+  };
+}
+
+function getCompleteWeekStartsInsideMonth(now: Date) {
+  const previousMonth = getPreviousMonthInfo(now);
+  const starts: string[] = [];
+  const cursor = startOfISOWeek(previousMonth.firstDay);
+  cursor.setHours(0, 0, 0, 0);
+
+  while (cursor <= previousMonth.lastDay) {
+    const weekEnd = addDays(cursor, 6);
+    if (cursor >= previousMonth.firstDay && weekEnd <= previousMonth.lastDay) {
+      starts.push(toISODate(cursor));
+    }
+    cursor.setDate(cursor.getDate() + 7);
+  }
+
+  return {
+    label: previousMonth.label,
+    weekStarts: starts
+  };
+}
+
 function getClubMeta(club: string) {
   return {
     color: CLUB_COLORS[club] ?? "#111827",
@@ -512,6 +552,7 @@ function buildClubParticipation(
   now: Date
 ): ClubParticipationItem[] {
   const lastCompleted = getLastCompletedWeek(now);
+  const previousMonth = getCompleteWeekStartsInsideMonth(now);
   const lastWeekRecords = records.filter(
     (record) => record.weekStart === lastCompleted.weekStart
   );
@@ -529,6 +570,30 @@ function buildClubParticipation(
       ? rawActiveTeams.filter((team) => teamKeys.has(getTeamKey(team)))
       : rawActiveTeams;
     const lastWeekCount = lastWeekRecords.filter((record) => record.club === club).length;
+    const monthlyRecords = records.filter(
+      (record) =>
+        record.club === club &&
+        record.team &&
+        previousMonth.weekStarts.includes(record.weekStart) &&
+        isValidTeamName(record.team, club)
+    );
+    const monthlyByTeam = monthlyRecords.reduce<Map<string, Set<string>>>((map, record) => {
+      const teamKey = getTeamKey(record.team ?? "");
+      if (teams.length && !teamKeys.has(teamKey)) {
+        return map;
+      }
+      const weeks = map.get(teamKey) ?? new Set<string>();
+      weeks.add(record.weekStart);
+      map.set(teamKey, weeks);
+      return map;
+    }, new Map());
+    const monthlyCompliantTeams = teams.filter(
+      (team) =>
+        previousMonth.weekStarts.length > 0 &&
+        previousMonth.weekStarts.every((weekStart) =>
+          monthlyByTeam.get(getTeamKey(team))?.has(weekStart)
+        )
+    ).length;
 
     return {
       club,
@@ -540,7 +605,15 @@ function buildClubParticipation(
       goalCompliance: lastWeekCount / goal,
       activeTeams: activeTeams.length,
       totalTeams: teams.length,
-      countryCompliance: teams.length ? activeTeams.length / teams.length : 0
+      countryCompliance: teams.length ? activeTeams.length / teams.length : 0,
+      previousMonthLabel: previousMonth.label,
+      monthlyCompliantTeams,
+      monthlyTotalTeams: teams.length,
+      monthlyCountryCompliance:
+        teams.length && previousMonth.weekStarts.length
+          ? monthlyCompliantTeams / teams.length
+          : 0,
+      monthlyWeeks: previousMonth.weekStarts
     };
   });
 }
